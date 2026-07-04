@@ -1,0 +1,13 @@
+- name: Health check on Ansible servers
+  hosts: servers
+  tasks:
+    - name: Ping test
+      ansible.builtin.ping:
+
+    - name: Check uptime
+      ansible.builtin.command: uptime
+      register: uptime_result
+
+    - name: Show uptime
+      ansible.builtin.debug:
+        msg: "{{ uptime_result.stdout }}"

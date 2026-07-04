@@ -1,0 +1,20 @@
+pipeline {
+    agent any
+    stages {
+        stage('Deploy Pods') {
+            steps {
+                sh 'kubectl apply -f ansible-nodes.yaml'
+            }
+        }
+        stage('Run Ansible Health Check') {
+            steps {
+                sh 'ansible-playbook -i hosts.ini healthcheck.yml'
+            }
+        }
+        stage('Install Nginx via Ansible') {
+            steps {
+                sh 'ansible-playbook -i hosts.ini install-nginx.yml'
+            }
+        }
+    }
+}
