@@ -1,6 +1,4 @@
 
----
-
 ```markdown
 # Jenkins + Ansible + Kubernetes Health Check & Automation
 
@@ -43,7 +41,7 @@ Defines the pipeline stages:
 
 ---
 
-### 2. **ansible-nodes.yaml**
+**### 2. **ansible-nodes.yaml****
 Kubernetes manifest that:
 - Creates **two pods** (`ansible-node1`, `ansible-node2`) running Ubuntu.
 - Installs SSH + Ansible inside each pod.
@@ -51,7 +49,7 @@ Kubernetes manifest that:
 
 ---
 
-### 3. **hosts.ini**
+**### 3. **hosts.ini****
 Ansible inventory file:
 - Lists both pods as servers.
 - Uses Minikube IP (`minikube ip`) + NodePorts for SSH connectivity.
