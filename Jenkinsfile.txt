@@ -3,24 +3,65 @@ pipeline {
     stages {
         stage('Checkout Repo') {
             steps {
-                // Clone your GitHub repo
                 git branch: 'main',
                     url: 'https://github.com/abhaysingh328/jenkins-ansible-k8s-healthcheck.git'
             }
         }
-        stage('Deploy Pods') {
+
+        stage('Verify/Create Namespace') {
             steps {
-                sh 'kubectl apply -f ansible-nodes.yaml'
+                script {
+                    // Replace 'devops-lab' with your desired namespace
+                    def ns = "devops-lab"
+                    sh """
+                    kubectl get ns ${ns} || kubectl create namespace ${ns}
+                    """
+                }
             }
         }
+
+        stage('Deploy Pods in Namespace') {
+            steps {
+                sh 'kubectl apply -f ansible-nodes.yaml -n devops-lab'
+            }
+        }
+
+        stage('Wait for Pods to Initialize') {
+            steps {
+                // Sleep to allow pods to pull images and start SSH
+                sh 'sleep 40'
+                sh 'kubectl get pods -n devops-lab'
+            }
+        }
+
         stage('Run Ansible Health Check') {
             steps {
-                sh 'ansible-playbook -i hosts.ini healthcheck.yml'
+                sh '''
+            export ANSIBLE_HOST_KEY_CHECKING=False
+            ansible-playbook -i hosts.ini healthcheck.yml
+            '''
             }
         }
+
         stage('Install Nginx via Ansible') {
             steps {
                 sh 'ansible-playbook -i hosts.ini install-nginx.yml'
+            }
+        }
+		
+		stage('Wait After Nginx Verification') {
+            steps {
+                // Give time for Nginx service to stabilize
+                sh 'sleep 20'
+            }
+        }
+		
+		        stage('Verify Nginx Installation') {
+            steps {
+                // Run a simple curl or service check
+                sh '''
+                ansible -i hosts.ini servers -m command -a "systemctl status nginx"
+                '''
             }
         }
     }
