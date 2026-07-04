@@ -1,6 +1,13 @@
 pipeline {
     agent any
     stages {
+        stage('Checkout Repo') {
+            steps {
+                // Clone your GitHub repo
+                git branch: 'main',
+                    url: 'https://github.com/abhaysingh328/jenkins-ansible-k8s-healthcheck.git'
+            }
+        }
         stage('Deploy Pods') {
             steps {
                 sh 'kubectl apply -f ansible-nodes.yaml'
