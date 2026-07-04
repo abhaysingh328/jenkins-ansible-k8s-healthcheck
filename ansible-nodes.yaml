@@ -23,7 +23,7 @@ spec:
             mkdir -p /var/run/sshd &&
             useradd -m -s /bin/bash ansibleuser &&
             echo "ansibleuser:ansibleuser" | chpasswd &&
-            /usr/sbin/sshd -D
+            exec /usr/sbin/sshd -D
         ports:
         - containerPort: 22
         readinessProbe:
@@ -72,7 +72,7 @@ spec:
             mkdir -p /var/run/sshd &&
             useradd -m -s /bin/bash ansibleuser &&
             echo "ansibleuser:ansibleuser" | chpasswd &&
-            /usr/sbin/sshd -D
+            exec /usr/sbin/sshd -D
         ports:
         - containerPort: 22
         readinessProbe:
