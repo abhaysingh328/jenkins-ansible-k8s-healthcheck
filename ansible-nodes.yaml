@@ -18,7 +18,7 @@ spec:
         command: ["/bin/bash", "-c"]
         args:
           - apt update &&
-            apt install -y openssh-server ansible &&
+            apt install -y openssh-server ansible python3.9 python3-pip &&
             useradd -m -s /bin/bash ansibleuser &&
             echo "ansibleuser:ansibleuser" | chpasswd &&
             service ssh start &&
@@ -60,7 +60,7 @@ spec:
         command: ["/bin/bash", "-c"]
         args:
           - apt update &&
-            apt install -y openssh-server ansible &&
+            apt install -y openssh-server ansible python3.9 python3-pip &&
             useradd -m -s /bin/bash ansibleuser &&
             echo "ansibleuser:ansibleuser" | chpasswd &&
             service ssh start &&
