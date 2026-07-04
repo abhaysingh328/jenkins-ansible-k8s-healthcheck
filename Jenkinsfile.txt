@@ -1,68 +1,97 @@
-pipeline {
-    agent any
-    stages {
-        stage('Checkout Repo') {
-            steps {
-                git branch: 'main',
-                    url: 'https://github.com/abhaysingh328/jenkins-ansible-k8s-healthcheck.git'
-            }
-        }
-
-        stage('Verify/Create Namespace') {
-            steps {
-                script {
-                    // Replace 'devops-lab' with your desired namespace
-                    def ns = "devops-lab"
-                    sh """
-                    kubectl get ns ${ns} || kubectl create namespace ${ns}
-                    """
-                }
-            }
-        }
-
-        stage('Deploy Pods in Namespace') {
-            steps {
-                sh 'kubectl apply -f ansible-nodes.yaml -n devops-lab'
-            }
-        }
-
-        stage('Wait for Pods to Initialize') {
-            steps {
-                // Sleep to allow pods to pull images and start SSH
-                sh 'sleep 40'
-                sh 'kubectl get pods -n devops-lab'
-            }
-        }
-
-        stage('Run Ansible Health Check') {
-            steps {
-                sh '''
-            export ANSIBLE_HOST_KEY_CHECKING=False
-            ansible-playbook -i hosts.ini healthcheck.yml
-            '''
-            }
-        }
-
-        stage('Install Nginx via Ansible') {
-            steps {
-                sh 'ansible-playbook -i hosts.ini install-nginx.yml'
-            }
-        }
-		
-		stage('Wait After Nginx Verification') {
-            steps {
-                // Give time for Nginx service to stabilize
-                sh 'sleep 20'
-            }
-        }
-		
-		        stage('Verify Nginx Installation') {
-            steps {
-                // Run a simple curl or service check
-                sh '''
-                ansible -i hosts.ini servers -m command -a "systemctl status nginx"
-                '''
-            }
-        }
-    }
-}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ansible-node1
+  namespace: devops-lab
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ansible-node1
+  template:
+    metadata:
+      labels:
+        app: ansible-node1
+    spec:
+      containers:
+      - name: ansible-node1
+        image: ubuntu:20.04
+        command: ["/bin/bash", "-c"]
+        args:
+          - apt update &&
+            apt install -y openssh-server python3.9 python3-pip &&
+            mkdir -p /var/run/sshd &&
+            useradd -m -s /bin/bash ansibleuser &&
+            echo "ansibleuser:ansibleuser" | chpasswd &&
+            exec /usr/sbin/sshd -D
+        ports:
+        - containerPort: 22
+        readinessProbe:
+          tcpSocket:
+            port: 22
+          initialDelaySeconds: 15
+          periodSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ansible-node1-ssh
+  namespace: devops-lab
+spec:
+  selector:
+    app: ansible-node1
+  ports:
+    - protocol: TCP
+      port: 22
+      targetPort: 22
+      nodePort: 30222
+  type: NodePort
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ansible-node2
+  namespace: devops-lab
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ansible-node2
+  template:
+    metadata:
+      labels:
+        app: ansible-node2
+    spec:
+      containers:
+      - name: ansible-node2
+        image: ubuntu:20.04
+        command: ["/bin/bash", "-c"]
+        args:
+          - apt update &&
+            apt install -y openssh-server python3.9 python3-pip &&
+            mkdir -p /var/run/sshd &&
+            useradd -m -s /bin/bash ansibleuser &&
+            echo "ansibleuser:ansibleuser" | chpasswd &&
+            exec /usr/sbin/sshd -D
+        ports:
+        - containerPort: 22
+        readinessProbe:
+          tcpSocket:
+            port: 22
+          initialDelaySeconds: 15
+          periodSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ansible-node2-ssh
+  namespace: devops-lab
+spec:
+  selector:
+    app: ansible-node2
+  ports:
+    - protocol: TCP
+      port: 22
+      targetPort: 22
+      nodePort: 30223
+  type: NodePort
