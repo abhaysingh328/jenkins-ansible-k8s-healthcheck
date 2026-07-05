@@ -1,13 +1,19 @@
-- name: Health check on Ansible servers
+- name: Health check Ansible servers
   hosts: servers
   tasks:
-    - name: Ping test
-      ansible.builtin.ping:
+    - name: Ping nodes
+      ping:
 
     - name: Check uptime
-      ansible.builtin.command: uptime
+      command: uptime
       register: uptime_result
 
-    - name: Show uptime
-      ansible.builtin.debug:
-        msg: "{{ uptime_result.stdout }}"
+    - debug:
+        msg: "Uptime: {{ uptime_result.stdout }}"
+
+    - name: Check running processes
+      command: ps aux
+      register: ps_result
+
+    - debug:
+        msg: "Processes: {{ ps_result.stdout_lines | select('search','ssh') | list }}"
