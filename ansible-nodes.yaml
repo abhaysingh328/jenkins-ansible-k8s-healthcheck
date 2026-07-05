@@ -20,7 +20,7 @@ spec:
     spec:
       containers:
       - name: ansible-node1
-        image: yourdockerhub/ansible-node:latest
+        image: asabhaysingh328/ansible-node:latest
         ports:
         - containerPort: 22
         readinessProbe:
@@ -61,7 +61,7 @@ spec:
     spec:
       containers:
       - name: ansible-node2
-        image: yourdockerhub/ansible-node:latest
+        image: asabhaysingh328/ansible-node:latest
         ports:
         - containerPort: 22
         readinessProbe:
