@@ -13,14 +13,27 @@ pipeline {
             }
         }
 
-        stage('Build & Push Docker Image') {
+     stage('Verify Docker Image') {
             steps {
-                sh '''
-                docker build -t $DOCKER_IMAGE:latest .
-                docker push $DOCKER_IMAGE:latest
-                '''
-            }
+        sh '''
+        if ! docker pull $DOCKER_IMAGE:latest; then
+          echo "Image not found, building new one..."
+          docker build -t $DOCKER_IMAGE:latest .
+          docker push $DOCKER_IMAGE:latest
+        else
+          echo "Image already exists in Docker Hub, skipping build."
+        fi
+        '''
         }
+    }
+		stage('Verify Namespace') {
+    steps {
+        sh '''
+        kubectl get ns $NAMESPACE || kubectl create namespace $NAMESPACE
+        '''
+    }
+}
+
 
         stage('Deploy Pods') {
             steps {
