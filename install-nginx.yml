@@ -1,26 +1,29 @@
-- name: Install and verify Nginx on Ansible servers
+- name: Install and verify Nginx
   hosts: servers
-  become: true
+  become: yes
   tasks:
-    - name: Update apt cache
-      ansible.builtin.apt:
-        update_cache: yes
-
     - name: Install Nginx
-      ansible.builtin.apt:
+      apt:
         name: nginx
         state: present
+        update_cache: yes
 
-    - name: Ensure Nginx is running
-      ansible.builtin.service:
-        name: nginx
-        state: started
-        enabled: yes
+    - name: Wait for Nginx service to stabilize
+      wait_for:
+        port: 80
+        delay: 15
+        timeout: 90
 
     - name: Check Nginx status
-      ansible.builtin.command: systemctl status nginx
+      command: systemctl status nginx
       register: nginx_status
 
-    - name: Show Nginx status
-      ansible.builtin.debug:
+    - debug:
         msg: "{{ nginx_status.stdout }}"
+
+    - name: Verify Nginx with curl
+      command: curl -I http://localhost
+      register: curl_result
+
+    - debug:
+        msg: "Nginx HTTP response: {{ curl_result.stdout }}"
