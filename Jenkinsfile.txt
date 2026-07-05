@@ -1,5 +1,10 @@
 pipeline {
     agent any
+    environment {
+        DOCKER_IMAGE = "asabhaysingh328/ansible-node"
+        NAMESPACE = "ansible-lab"
+        INVENTORY = "hosts.ini"
+    }
     stages {
         stage('Checkout Repo') {
             steps {
@@ -8,68 +13,53 @@ pipeline {
             }
         }
 
-        stage('Verify/Create Namespace') {
+        stage('Build & Push Docker Image') {
             steps {
-                script {
-                    // Replace 'devops-lab' with your desired namespace
-                    def ns = "devops-lab"
-                    sh """
-                    kubectl get ns ${ns} || kubectl create namespace ${ns}
-                    """
-                }
+                sh '''
+                docker build -t $DOCKER_IMAGE:latest .
+                docker push $DOCKER_IMAGE:latest
+                '''
             }
         }
 
-        stage('Deploy Pods in Namespace') {
+        stage('Deploy Pods') {
             steps {
-                sh 'kubectl apply -f ansible-nodes.yaml -n devops-lab'
+                sh 'kubectl apply -f ansible-nodes.yaml -n $NAMESPACE'
             }
         }
 
-        stage('Wait for Pods to Initialize') {
+        stage('Wait for Pods Ready') {
             steps {
-                // Sleep to allow pods to pull images and start SSH
-                sh 'sleep 40'
-                sh 'kubectl get pods -n devops-lab'
+                sh 'kubectl wait --for=condition=Ready pod --all -n $NAMESPACE --timeout=180s'
+                sh 'sleep 20'
             }
         }
-stage('pods verify') {
-    steps {
-        sh '''
-        kubectl apply -f ansible-nodes.yaml
-        kubectl wait --for=condition=Ready pod -n devops-lab --all --timeout=120s
-        kubectl exec -it ansible-node1 -n devops-lab -- ps aux | grep ssh
-        '''
-    }
-}
 
         stage('Run Ansible Health Check') {
             steps {
                 sh '''
-            export ANSIBLE_HOST_KEY_CHECKING=False
-            ansible-playbook -i hosts.ini healthcheck.yml
-            '''
+                export ANSIBLE_HOST_KEY_CHECKING=False
+                ansible-playbook -i $INVENTORY healthcheck.yml
+                '''
             }
         }
 
         stage('Install Nginx via Ansible') {
             steps {
-                sh 'ansible-playbook -i hosts.ini install-nginx.yml'
+                sh 'ansible-playbook -i $INVENTORY install-nginx.yml'
             }
         }
-		
-		stage('Wait After Nginx Verification') {
+
+        stage('Wait After Nginx Installation') {
             steps {
-                // Give time for Nginx service to stabilize
-                sh 'sleep 20'
+                sh 'sleep 30'
             }
         }
-		
-		        stage('Verify Nginx Installation') {
+
+        stage('Verify Nginx Health') {
             steps {
-                // Run a simple curl or service check
                 sh '''
-                ansible -i hosts.ini servers -m command -a "systemctl status nginx"
+                ansible -i $INVENTORY servers -m command -a "curl -I http://localhost"
                 '''
             }
         }
