@@ -1,11 +1,14 @@
 pipeline {
     agent any
+
     environment {
         DOCKER_IMAGE = "asabhaysingh328/ansible-node"
         NAMESPACE = "ansible-lab"
         INVENTORY = "hosts.ini"
     }
+
     stages {
+
         stage('Checkout Repo') {
             steps {
                 git branch: 'main',
@@ -13,38 +16,56 @@ pipeline {
             }
         }
 
-     stage('Verify Docker Image') {
+        // ✅ FIX: Always build & push (no skip logic)
+        stage('Build & Push Docker Image') {
             steps {
-        sh '''
-        if ! docker pull $DOCKER_IMAGE:latest; then
-          echo "Image not found, building new one..."
-          docker build -t $DOCKER_IMAGE:latest .
-          docker push $DOCKER_IMAGE:latest
-        else
-          echo "Image already exists in Docker Hub, skipping build."
-        fi
-        '''
-        }
-    }
-		stage('Verify Namespace') {
-    steps {
-        sh '''
-        kubectl get ns $NAMESPACE || kubectl create namespace $NAMESPACE
-        '''
-    }
-}
+                sh '''
+                echo "Building Docker image..."
+                docker build -t $DOCKER_IMAGE:latest .
 
+                echo "Pushing Docker image..."
+                docker push $DOCKER_IMAGE:latest
+                '''
+            }
+        }
+
+        stage('Verify Namespace') {
+            steps {
+                sh '''
+                kubectl get ns $NAMESPACE || kubectl create namespace $NAMESPACE
+                '''
+            }
+        }
 
         stage('Deploy Pods') {
             steps {
-                sh 'kubectl apply -f ansible-nodes.yaml -n $NAMESPACE'
+                sh '''
+                kubectl apply -f ansible-nodes.yaml -n $NAMESPACE
+                '''
             }
         }
 
         stage('Wait for Pods Ready') {
             steps {
-                sh 'kubectl wait --for=condition=Ready pod --all -n $NAMESPACE --timeout=180s'
-                sh 'sleep 20'
+                sh '''
+                kubectl wait --for=condition=Ready pod --all -n $NAMESPACE --timeout=180s
+                sleep 20
+                '''
+            }
+        }
+
+        // ✅ Debug step (very useful)
+        stage('Debug SSH') {
+            steps {
+                sh '''
+                POD=$(kubectl get pods -n $NAMESPACE -o jsonpath="{.items[0].metadata.name}")
+                
+                echo "Checking sshd process..."
+                kubectl exec -n $NAMESPACE $POD -- ps aux | grep sshd || true
+
+                echo "Checking port 22..."
+                kubectl exec -n $NAMESPACE $POD -- ss -tulnp | grep 22 || true
+                '''
             }
         }
 
@@ -59,7 +80,9 @@ pipeline {
 
         stage('Install Nginx via Ansible') {
             steps {
-                sh 'ansible-playbook -i $INVENTORY install-nginx.yml'
+                sh '''
+                ansible-playbook -i $INVENTORY install-nginx.yml
+                '''
             }
         }
 
