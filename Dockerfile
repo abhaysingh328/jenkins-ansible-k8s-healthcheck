@@ -13,24 +13,28 @@ RUN apt-get update && \
     python3-pip \
     python3-apt \
     iproute2 \
-    net-tools && \
+    net-tools \
+    curl && \
     rm -rf /var/lib/apt/lists/*
 
-# Fix Ansible compatibility (VERY IMPORTANT)
-RUN ln -s /usr/bin/python3 /usr/bin/python
+# Fix Ansible compatibility
+RUN ln -sf /usr/bin/python3 /usr/bin/python
 
 # Create Ansible user
 RUN useradd -m -s /bin/bash ansibleuser && \
     echo "ansibleuser:ansibleuser" | chpasswd && \
-    adduser ansibleuser sudo
+    usermod -aG sudo ansibleuser && \
+    echo "ansibleuser ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/ansibleuser && \
+    chmod 440 /etc/sudoers.d/ansibleuser
 
 # Configure SSH
-RUN mkdir /var/run/sshd
-RUN echo "PasswordAuthentication yes" >> /etc/ssh/sshd_config
-RUN echo "PermitRootLogin yes" >> /etc/ssh/sshd_config
+RUN mkdir /var/run/sshd && \
+    echo "PasswordAuthentication yes" >> /etc/ssh/sshd_config && \
+    echo "PermitRootLogin yes" >> /etc/ssh/sshd_config && \
+    echo "UsePAM no" >> /etc/ssh/sshd_config
 
-# Expose SSH port
+# Expose SSH
 EXPOSE 22
 
-# Start SSH service
-CMD ["/usr/sbin/sshd", "-D"]
+# Start SSH
+CMD ["/usr/sbin/sshd","-D"]
