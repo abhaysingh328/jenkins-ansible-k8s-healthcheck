@@ -3,23 +3,32 @@ pipeline {
 
     environment {
         DOCKER_IMAGE = "asabhaysingh328/ansible-node"
-        NAMESPACE = "ansible-lab"
-        INVENTORY = "hosts.ini"
+        NAMESPACE    = "ansible-lab"
+        INVENTORY    = "hosts.ini"
     }
 
     stages {
 
-        stage('Checkout Repo') {
+        stage('Checkout Repository') {
             steps {
                 git branch: 'main',
-                url: 'https://github.com/abhaysingh328/jenkins-ansible-k8s-healthcheck.git'
+                    url: 'https://github.com/abhaysingh328/jenkins-ansible-k8s-healthcheck.git'
             }
         }
 
-        stage('Build & Push Docker Image') {
+        stage('Build Docker Image') {
             steps {
                 sh '''
+                echo "===== Building Docker Image ====="
                 docker build -t $DOCKER_IMAGE:latest .
+                '''
+            }
+        }
+
+        stage('Push Docker Image') {
+            steps {
+                sh '''
+                echo "===== Pushing Docker Image ====="
                 docker push $DOCKER_IMAGE:latest
                 '''
             }
@@ -28,12 +37,13 @@ pipeline {
         stage('Verify Namespace') {
             steps {
                 sh '''
-                kubectl get ns $NAMESPACE || kubectl create namespace $NAMESPACE
+                kubectl get namespace $NAMESPACE || \
+                kubectl create namespace $NAMESPACE
                 '''
             }
         }
 
-        stage('Deploy Pods') {
+        stage('Deploy Ansible Nodes') {
             steps {
                 sh '''
                 kubectl apply -f ansible-nodes.yaml -n $NAMESPACE
@@ -44,103 +54,126 @@ pipeline {
         stage('Wait for Pods Ready') {
             steps {
                 sh '''
-                kubectl wait --for=condition=Ready pod --all -n $NAMESPACE --timeout=180s
+                echo "Waiting for Pods..."
+
+                kubectl wait \
+                --for=condition=Ready \
+                pod \
+                --all \
+                -n $NAMESPACE \
+                --timeout=180s
+
                 sleep 20
                 '''
             }
         }
 
-        stage('Debug SSH') {
+        stage('Verify Kubernetes Resources') {
             steps {
                 sh '''
-                POD=$(kubectl get pods -n $NAMESPACE -o jsonpath="{.items[0].metadata.name}")
+                echo "===== Pods ====="
+                kubectl get pods -n $NAMESPACE
 
-                echo "===== SSHD Status ====="
-                kubectl exec -n $NAMESPACE $POD -- ps -ef | grep sshd || true
+                echo ""
 
-                echo "===== Port 22 ====="
-                kubectl exec -n $NAMESPACE $POD -- ss -tlnp | grep :22 || true
-
-                echo "===== Inventory ====="
-                pwd
-                ls -la
-                cat hosts.ini
+                echo "===== Services ====="
+                kubectl get svc -n $NAMESPACE
                 '''
             }
         }
 
-        stage('Run Ansible Health Check') {
+        stage('Prepare SSH') {
             steps {
                 sh '''
-                set -e
-
-                export ANSIBLE_HOST_KEY_CHECKING=False
-
                 mkdir -p ~/.ssh
 
-                echo "===== Remove Old SSH Keys ====="
+                echo "Removing old SSH fingerprints..."
 
                 ssh-keygen -R "[192.168.49.2]:30022" || true
                 ssh-keygen -R "[192.168.49.2]:30023" || true
 
-                echo "===== Add New SSH Keys ====="
+                echo "Adding new SSH fingerprints..."
 
                 ssh-keyscan -H -p 30022 192.168.49.2 >> ~/.ssh/known_hosts
                 ssh-keyscan -H -p 30023 192.168.49.2 >> ~/.ssh/known_hosts
+                '''
+            }
+        }
 
-                echo "===== Verify Inventory ====="
-
-                ls -l
-                cat hosts.ini
-
-                echo "===== Test SSH ====="
-
+        stage('Verify SSH Connectivity') {
+            steps {
+                sh '''
                 sshpass -p ansibleuser ssh \
-                    -o StrictHostKeyChecking=no \
-                    -p 30022 \
-                    ansibleuser@192.168.49.2 \
-                    hostname
+                -o StrictHostKeyChecking=no \
+                -p 30022 \
+                ansibleuser@192.168.49.2 \
+                hostname
+                '''
+            }
+        }
 
-                echo "===== Ansible Ping ====="
+        stage('Ansible Connectivity Test') {
+            steps {
+                sh '''
+                export ANSIBLE_HOST_KEY_CHECKING=False
 
                 ansible servers \
-                    -i hosts.ini \
-                    -m ping \
-                    -vvvv
+                -i $INVENTORY \
+                -m ping
+                '''
+            }
+        }
 
-                echo "===== Health Check ====="
+        stage('Run Health Check') {
+            steps {
+                sh '''
+                export ANSIBLE_HOST_KEY_CHECKING=False
 
                 ansible-playbook \
-                    -i hosts.ini \
-                    healthcheck.yml \
-                    -vvvv
+                -i $INVENTORY \
+                healthcheck.yml
                 '''
             }
         }
 
-        stage('Install Nginx via Ansible') {
+        stage('Install Nginx') {
             steps {
                 sh '''
-                ansible-playbook -i hosts.ini install-nginx.yml
+                export ANSIBLE_HOST_KEY_CHECKING=False
+
+                ansible-playbook \
+                -i $INVENTORY \
+                install-nginx.yml
                 '''
             }
         }
 
-        stage('Wait After Nginx Installation') {
-            steps {
-                sh 'sleep 15'
-            }
-        }
-
-        stage('Verify Nginx Health') {
+        stage('Verify Nginx') {
             steps {
                 sh '''
+                export ANSIBLE_HOST_KEY_CHECKING=False
+
                 ansible servers \
-                    -i hosts.ini \
-                    -m shell \
-                    -a "curl -I http://localhost"
+                -i $INVENTORY \
+                -m uri \
+                -a "url=http://localhost status_code=200"
                 '''
             }
+        }
+    }
+
+    post {
+
+        always {
+            echo '========== Pipeline Finished =========='
+        }
+
+        success {
+            echo 'SUCCESS : GitHub -> Jenkins -> Docker -> Kubernetes -> Ansible completed successfully.'
+        }
+
+        failure {
+            echo 'FAILURE : Please check the failed stage above.'
         }
     }
 }
